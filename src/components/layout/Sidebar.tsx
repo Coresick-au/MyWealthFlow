@@ -24,8 +24,12 @@ const navItems = [
     { icon: FileText, label: 'Tax Reports', href: '/reports' },
 ]
 
-export function Sidebar() {
-    const [collapsed, setCollapsed] = useState(false)
+interface SidebarProps {
+    collapsed: boolean
+    onToggle: () => void
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const pathname = usePathname()
 
     return (
@@ -85,7 +89,7 @@ export function Sidebar() {
 
             {/* Collapse Toggle */}
             <button
-                onClick={() => setCollapsed(!collapsed)}
+                onClick={onToggle}
                 className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-dark-card border border-dark-border rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-card-hover transition-colors"
             >
                 {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
