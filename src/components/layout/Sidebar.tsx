@@ -49,7 +49,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         className="h-8 w-auto"
                     />
                     {!collapsed && (
-                        <span className="font-bold text-lg tracking-tight text-white">Wealth Flow</span>
+                        <span className="font-bold text-lg tracking-tight text-white">My Wealth Flow</span>
                     )}
                 </Link>
             </div>
@@ -94,6 +94,23 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             >
                 {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             </button>
+
+            {/* Dev Helper: Reset Data */}
+            {!collapsed && (
+                <div className="px-4 py-2">
+                    <button
+                        onClick={() => {
+                            if (window.confirm('Are you sure you want to clear ALL data? This cannot be undone.')) {
+                                localStorage.removeItem('mwf_data')
+                                window.location.reload()
+                            }
+                        }}
+                        className="w-full text-xs text-red-400 opacity-50 hover:opacity-100 transition-opacity"
+                    >
+                        [DEV] Reset All Data
+                    </button>
+                </div>
+            )}
 
             {/* Settings at bottom */}
             <div className="p-3 border-t border-dark-border">

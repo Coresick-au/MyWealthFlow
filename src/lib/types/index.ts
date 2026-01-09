@@ -30,6 +30,7 @@ export type AccountType =
     | 'savings'
     | 'offset'
     | 'loan'
+    | 'mortgage'
     | 'credit_card'
 
 export interface Account {
@@ -62,7 +63,7 @@ export interface Property {
     purchasePrice: number
     currentValue: number // Manual update
     weeklyRent?: number // If investment
-    status: PropertyStatus
+    propertyStatus: PropertyStatus
     createdAt: Date
 }
 
@@ -184,6 +185,7 @@ export interface Transaction {
     importedAt: Date
     // Allocation status
     isAllocated: boolean
+    needsReview?: boolean
     allocations: TransactionAllocation[]
 }
 

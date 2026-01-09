@@ -95,78 +95,11 @@ function generateId(prefix: string): string {
 }
 
 // ============================================
-// INITIAL DATA (Mock)
+// INITIAL DATA (Empty for Production/Test)
 // ============================================
-const INITIAL_ACCOUNTS: AccountRecord[] = [
-    {
-        id: 'acc_1',
-        bankId: 'CBA',
-        accountNumber: 'xxxx4189',
-        type: 'loan',
-        nickname: '11 Tobruk Cres Mortgage',
-        isActive: true,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-    },
-    {
-        id: 'acc_2',
-        bankId: 'CBA',
-        accountNumber: 'xxxx7886',
-        type: 'transaction',
-        nickname: 'Brad Leeming Personal Commbank',
-        isActive: true,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-    },
-    {
-        id: 'acc_3',
-        bankId: 'NAB',
-        accountNumber: 'xxxx3675',
-        type: 'offset',
-        nickname: 'Blackwood Rd Offset - NAB',
-        isActive: true,
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-    }
-]
+const INITIAL_ACCOUNTS: AccountRecord[] = []
 
-const INITIAL_PROPERTIES: PropertyRecord[] = [
-    {
-        id: 'prop_1',
-        address: '69 Blackwood Road',
-        suburb: 'Leeming',
-        state: 'WA',
-        postcode: '6149',
-        type: 'investment',
-        purchaseDate: new Date('2018-06-15'),
-        purchasePrice: 485000,
-        currentValue: 720000,
-        weeklyRent: 550,
-        status: 'active',
-        propertyStatus: 'rented',
-        createdAt: new Date(),
-        updatedAt: new Date()
-    } as PropertyRecord,
-    {
-        id: 'prop_2',
-        address: '11 Tobruk Crescent',
-        suburb: 'Port Kennedy',
-        state: 'WA',
-        postcode: '6172',
-        type: 'investment',
-        purchaseDate: new Date('2020-02-20'),
-        purchasePrice: 390000,
-        currentValue: 520000,
-        weeklyRent: 480,
-        status: 'active',
-        propertyStatus: 'rented',
-        createdAt: new Date(),
-        updatedAt: new Date()
-    } as PropertyRecord
-]
+const INITIAL_PROPERTIES: PropertyRecord[] = []
 
 const INITIAL_STATE: DataState = {
     accounts: INITIAL_ACCOUNTS,
@@ -184,6 +117,39 @@ const DataContext = createContext<DataContextType | null>(null)
 
 export function DataProvider({ children }: { children: ReactNode }) {
     const [data, setData] = useState<DataState>(INITIAL_STATE)
+    const [isLoaded, setIsLoaded] = useState(false)
+
+    // Load from LocalStorage on mount
+    React.useEffect(() => {
+        const savedData = localStorage.getItem('mwf_data')
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData)
+                // Need to revive dates since JSON.parse makes them strings
+                const revivedState: DataState = {
+                    ...parsed,
+                    accounts: parsed.accounts.map((x: any) => ({ ...x, createdAt: new Date(x.createdAt), updatedAt: new Date(x.updatedAt), archivedAt: x.archivedAt ? new Date(x.archivedAt) : undefined, deletedAt: x.deletedAt ? new Date(x.deletedAt) : undefined })),
+                    properties: parsed.properties.map((x: any) => ({ ...x, purchaseDate: new Date(x.purchaseDate), createdAt: new Date(x.createdAt), updatedAt: new Date(x.updatedAt), archivedAt: x.archivedAt ? new Date(x.archivedAt) : undefined, deletedAt: x.deletedAt ? new Date(x.deletedAt) : undefined })),
+                    transactions: parsed.transactions.map((x: any) => ({ ...x, date: new Date(x.date), importedAt: new Date(x.importedAt), createdAt: new Date(x.createdAt), updatedAt: new Date(x.updatedAt) })),
+                    // categories, contacts, autoRules similarly if needed, but they are empty in initial mock
+                    categories: parsed.categories || [],
+                    contacts: parsed.contacts || [],
+                    autoRules: parsed.autoRules || []
+                }
+                setData(revivedState)
+            } catch (e) {
+                console.error('Failed to load data', e)
+            }
+        }
+        setIsLoaded(true)
+    }, [])
+
+    // Save to LocalStorage on change
+    React.useEffect(() => {
+        if (isLoaded) {
+            localStorage.setItem('mwf_data', JSON.stringify(data))
+        }
+    }, [data, isLoaded])
 
     // ========== ACCOUNTS ==========
     const addAccount = useCallback((account: Omit<AccountRecord, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => {

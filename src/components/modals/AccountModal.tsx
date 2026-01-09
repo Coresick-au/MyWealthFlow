@@ -17,6 +17,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
     { value: 'savings', label: 'Savings Account' },
     { value: 'offset', label: 'Offset Account' },
     { value: 'loan', label: 'Loan Account' },
+    { value: 'mortgage', label: 'Mortgage' },
     { value: 'credit_card', label: 'Credit Card' }
 ]
 
@@ -232,7 +233,7 @@ export function AccountModal({ isOpen, onClose, account, mode = 'create' }: Acco
                                 <button
                                     type="button"
                                     onClick={handleArchive}
-                                    className="px-4 py-2 bg-dark-bg border border-dark-border rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all flex items-center gap-2 text-sm font-medium"
+                                    className="h-11 px-4 bg-dark-bg border border-dark-border rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all flex items-center gap-2 text-sm font-medium"
                                 >
                                     <Archive size={16} />
                                     Archive
@@ -240,7 +241,7 @@ export function AccountModal({ isOpen, onClose, account, mode = 'create' }: Acco
                                 <button
                                     type="button"
                                     onClick={() => setShowDeleteConfirm(true)}
-                                    className="px-4 py-2 bg-dark-bg border border-red-500/30 rounded-xl text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-2 text-sm font-medium"
+                                    className="h-11 px-4 bg-dark-bg border border-red-500/30 rounded-xl text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-2 text-sm font-medium"
                                 >
                                     <Trash2 size={16} />
                                     Delete
@@ -252,14 +253,14 @@ export function AccountModal({ isOpen, onClose, account, mode = 'create' }: Acco
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-6 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-white font-medium hover:bg-dark-card-hover transition-colors"
+                            className="h-11 px-6 bg-dark-bg border border-dark-border rounded-xl text-white font-medium hover:bg-dark-card-hover transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             onClick={handleSubmit}
-                            className="px-6 py-2.5 bg-accent-teal text-dark-bg rounded-xl font-bold hover:shadow-lg hover:shadow-accent-teal/20 transition-all"
+                            className="h-11 px-6 bg-accent-teal text-dark-bg rounded-xl font-bold hover:shadow-lg hover:shadow-accent-teal/20 transition-all"
                         >
                             {mode === 'create' ? 'Add Account' : 'Save Changes'}
                         </button>

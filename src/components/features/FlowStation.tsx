@@ -64,12 +64,11 @@ export function TransactionFlowStation({
     }, [transactions, filter])
 
     const stats = useMemo(() => {
-        const approved = transactions.filter(t => t.approved)
-        const income = approved.filter(t => t.isIncome).reduce((sum, t) => sum + t.amount, 0)
-        const expenses = approved.filter(t => !t.isIncome).reduce((sum, t) => sum + Math.abs(t.amount), 0)
+        // All transactions are considered "approved" for import in this simplified view
+        const income = transactions.filter(t => t.isIncome).reduce((sum, t) => sum + t.amount, 0)
+        const expenses = transactions.filter(t => !t.isIncome).reduce((sum, t) => sum + Math.abs(t.amount), 0)
         return {
             total: transactions.length,
-            approved: approved.length,
             income,
             expenses,
             net: income - expenses
@@ -97,8 +96,10 @@ export function TransactionFlowStation({
     }
 
     const handleSubmit = () => {
-        const approvedTransactions = transactions.filter(t => t.approved)
-        onApprove(approvedTransactions)
+        // Import all remaining transactions (not deleted)
+        // We treat them all as "approved" from this view's perspective
+        // They will be marked as "needsReview" by the parent/context
+        onApprove(transactions)
     }
 
     return (
@@ -115,7 +116,7 @@ export function TransactionFlowStation({
                                 <h1 className="text-2xl font-bold text-white">Transaction Flow Station</h1>
                                 {detectedBank && <BankBadge bankCode={detectedBank} />}
                             </div>
-                            <p className="text-gray-400 text-sm">Review & categorize {stats.total} transactions</p>
+                            <p className="text-gray-400 text-sm">Review & categorise {stats.total} transactions</p>
                         </div>
                     </div>
 
@@ -140,7 +141,7 @@ export function TransactionFlowStation({
                 <div className="grid grid-cols-4 gap-4 mb-6">
                     <div className="bg-dark-card rounded-xl p-4 border border-dark-border">
                         <p className="text-xs text-gray-400 uppercase tracking-wide">To Import</p>
-                        <p className="text-2xl font-bold text-white mt-1">{stats.approved}</p>
+                        <p className="text-2xl font-bold text-white mt-1">{stats.total}</p>
                     </div>
                     <div className="bg-dark-card rounded-xl p-4 border border-dark-border">
                         <p className="text-xs text-gray-400 uppercase tracking-wide">Income</p>
@@ -171,7 +172,6 @@ export function TransactionFlowStation({
                             properties={properties}
                             entities={entities}
                             onUpdate={(updates) => updateTransaction(transaction.id, updates)}
-                            onToggleApproval={() => toggleApproval(transaction.id)}
                             onRemove={() => removeTransaction(transaction.id)}
                         />
                     ))}
@@ -187,23 +187,13 @@ export function TransactionFlowStation({
                             Cancel
                         </button>
 
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={approveAll}
-                                className="flex items-center gap-2 px-5 py-3 bg-dark-card-hover border border-dark-border rounded-xl text-white hover:bg-dark-border transition-colors"
-                            >
-                                <Sparkles size={18} className="text-accent-purple" />
-                                Approve All
-                            </button>
-
-                            <button
-                                onClick={handleSubmit}
-                                className="flex items-center gap-2 px-8 py-3 bg-accent-lime text-dark-bg font-bold rounded-xl hover:shadow-lg hover:shadow-accent-lime/30 transition-all"
-                            >
-                                <Check size={20} />
-                                Import {stats.approved} Transactions
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleSubmit}
+                            className="flex items-center gap-2 px-8 py-3 bg-accent-lime text-dark-bg font-bold rounded-xl hover:shadow-lg hover:shadow-accent-lime/30 transition-all"
+                        >
+                            <Check size={20} />
+                            Import {stats.total} Transactions
+                        </button>
                     </div>
                 </div>
             </div>
@@ -241,7 +231,6 @@ interface TransactionCardProps {
     properties: Array<{ id: string; address: string }>
     entities: Entity[]
     onUpdate: (updates: Partial<FlowStationTransaction>) => void
-    onToggleApproval: () => void
     onRemove: () => void
 }
 
@@ -250,7 +239,6 @@ function TransactionCard({
     properties,
     entities,
     onUpdate,
-    onToggleApproval,
     onRemove
 }: TransactionCardProps) {
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
@@ -260,29 +248,9 @@ function TransactionCard({
 
     return (
         <div
-            className={`
-        bg-dark-card rounded-xl border transition-all
-        ${transaction.approved
-                    ? 'border-dark-border'
-                    : 'border-accent-coral/30 opacity-60'
-                }
-      `}
+            className='bg-dark-card rounded-xl border border-dark-border transition-all'
         >
             <div className="flex items-center p-4 gap-4">
-                {/* Approval Toggle */}
-                <button
-                    onClick={onToggleApproval}
-                    className={`
-            w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0
-            ${transaction.approved
-                            ? 'bg-accent-lime text-dark-bg'
-                            : 'bg-dark-card-hover border border-dark-border text-gray-400'
-                        }
-          `}
-                >
-                    {transaction.approved ? <Check size={16} /> : null}
-                </button>
-
                 {/* Bank Badge */}
                 <div className="w-10 flex-shrink-0">
                     <BankBadge bankCode={transaction.bank} />

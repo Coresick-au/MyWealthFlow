@@ -40,7 +40,7 @@ export function generateTransactionHash(
         hash = ((hash << 5) - hash) + char
         hash = hash & hash
     }
-    return `txn_${Math.abs(hash).toString(36)}_${Date.now().toString(36).slice(-4)}`
+    return `txn_${Math.abs(hash).toString(36)}`
 }
 
 // Parse various Australian date formats to Date

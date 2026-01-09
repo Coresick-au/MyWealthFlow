@@ -200,12 +200,12 @@ export function guessCategory(description: string): string {
     // ============================================
     // DEFAULT
     // ============================================
-    return 'Uncategorized'
+    return 'Uncategorised'
 }
 
 // List of all categories for dropdowns
 export const CATEGORIES = [
-    'Uncategorized',
+    'Uncategorised',
     'Groceries',
     'Fuel',
     'Dining Out',

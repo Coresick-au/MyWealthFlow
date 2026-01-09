@@ -319,11 +319,11 @@ export function PropertyModal({ isOpen, onClose, property, mode = 'create' }: Pr
                     <div className="flex gap-2">
                         {mode === 'edit' && property && (
                             <>
-                                <button type="button" onClick={handleArchive} className="px-4 py-2 bg-dark-bg border border-dark-border rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all flex items-center gap-2 text-sm font-medium">
+                                <button type="button" onClick={handleArchive} className="h-11 px-4 bg-dark-bg border border-dark-border rounded-xl text-gray-400 hover:text-white hover:border-white/30 transition-all flex items-center gap-2 text-sm font-medium">
                                     <Archive size={16} />
                                     Archive
                                 </button>
-                                <button type="button" onClick={() => setShowDeleteConfirm(true)} className="px-4 py-2 bg-dark-bg border border-red-500/30 rounded-xl text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-2 text-sm font-medium">
+                                <button type="button" onClick={() => setShowDeleteConfirm(true)} className="h-11 px-4 bg-dark-bg border border-red-500/30 rounded-xl text-red-400 hover:bg-red-500/10 transition-all flex items-center gap-2 text-sm font-medium">
                                     <Trash2 size={16} />
                                     Delete
                                 </button>
@@ -331,10 +331,10 @@ export function PropertyModal({ isOpen, onClose, property, mode = 'create' }: Pr
                         )}
                     </div>
                     <div className="flex gap-3">
-                        <button type="button" onClick={onClose} className="px-6 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-white font-medium hover:bg-dark-card-hover transition-colors">
+                        <button type="button" onClick={onClose} className="h-11 px-6 bg-dark-bg border border-dark-border rounded-xl text-white font-medium hover:bg-dark-card-hover transition-colors">
                             Cancel
                         </button>
-                        <button type="submit" onClick={handleSubmit} className="px-6 py-2.5 bg-accent-teal text-dark-bg rounded-xl font-bold hover:shadow-lg hover:shadow-accent-teal/20 transition-all">
+                        <button type="submit" onClick={handleSubmit} className="h-11 px-6 bg-accent-teal text-dark-bg rounded-xl font-bold hover:shadow-lg hover:shadow-accent-teal/20 transition-all">
                             {mode === 'create' ? 'Add Property' : 'Save Changes'}
                         </button>
                     </div>

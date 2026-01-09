@@ -17,31 +17,81 @@ import {
     Bell
 } from 'lucide-react'
 import Link from 'next/link'
-
-// Sample data for demo
-const sampleTransactions = [
-    { merchant: 'Bunnings Warehouse', category: 'Property Maintenance', amount: '-$142.50', date: 'Today', isIncome: false },
-    { merchant: 'Woolworths', category: 'Groceries', amount: '-$88.20', date: 'Yesterday', isIncome: false },
-    { merchant: 'Rental Income - 24 Smith St', category: 'Income', amount: '+$650.00', date: 'Jan 6', isIncome: true },
-    { merchant: 'Water Corp', category: 'Water Charges', amount: '-$120.00', date: 'Jan 3', isIncome: false },
-]
-
-const sampleProperties = [
-    { address: '24 Smith St, Newman', value: '$520k', status: 'rented' as const, yield: '6.2%', weeklyRent: '650' },
-    { address: '88 West Rd, Perth', value: '$710k', status: 'vacant' as const, yield: '0.0%' },
-]
+import { useData } from '@/lib/context/DataContext'
 
 const weeklyData = [
-    { label: '12 Oct', value: 2400, highlighted: false },
-    { label: '19 Oct', value: 3200, highlighted: false },
-    { label: '26 Oct', value: 2800, highlighted: false },
-    { label: '03 Nov', value: 3500, highlighted: true },
-    { label: '10 Nov', value: 2100, highlighted: false },
-    { label: '17 Nov', value: 2900, highlighted: false },
-    { label: '24 Nov', value: 3400, highlighted: false },
+    { label: '12 Oct', value: 0, highlighted: false },
+    { label: '19 Oct', value: 0, highlighted: false },
+    { label: '26 Oct', value: 0, highlighted: false },
+    { label: '03 Nov', value: 0, highlighted: true },
+    { label: '10 Nov', value: 0, highlighted: false },
+    { label: '17 Nov', value: 0, highlighted: false },
+    { label: '24 Nov', value: 0, highlighted: false },
 ]
 
 export default function Dashboard() {
+    const { getTransactions, getProperties, getAccounts } = useData()
+
+    // Get Data
+    const transactions = getTransactions()
+    const properties = getProperties()
+    const accounts = getAccounts()
+
+    // --- CALCULATIONS ---
+
+    // 1. Net Position (Total Property Value + Cash - Loans)
+    // For now, simple sum of property values as requested in plan
+    const totalPropertyValue = properties.reduce((sum, p) => sum + p.currentValue, 0)
+    // const totalAccountBalance = accounts.reduce((sum, a) => sum + (a.balance || 0), 0) // TODO: Add balance to Account type
+    const netPosition = totalPropertyValue // + totalAccountBalance
+
+    // 2. Cash Available (Net Cash Flow / All Time Transaction Sum)
+    // Since we don't have opening balances, this is just "Cash Generated"
+    const cashAvailable = transactions.reduce((sum, t) => sum + t.amount, 0)
+
+    // 3. YTD Expenses (Since July 1st)
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const fyStartYear = now.getMonth() >= 6 ? currentYear : currentYear - 1
+    const fyStartDate = new Date(fyStartYear, 6, 1) // July 1st
+
+    const ytdExpenses = transactions
+        .filter(t => t.date >= fyStartDate && t.amount < 0)
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+
+    // 4. Property Income (Monthly Estimate)
+    const monthlyPropertyIncome = properties.reduce((sum, p) => {
+        // If rented and has rent
+        if (p.propertyStatus === 'rented' && p.weeklyRent) {
+            return sum + (p.weeklyRent * 52 / 12)
+        }
+        return sum
+    }, 0)
+
+    // --- RECENT DATA ---
+    const recentTransactions = [...transactions]
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, 5)
+        .map(t => ({
+            merchant: t.cleanDescription || t.rawDescription,
+            category: t.allocations[0]?.categoryId || 'Uncategorised', // Placeholder
+            amount: t.amount, // TransactionRow handles formatting
+            date: t.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
+            isIncome: t.amount > 0
+        }))
+
+    const investmentProperties = properties
+        .filter(p => p.type === 'investment')
+        .slice(0, 3)
+
+    // --- CHART DATA (Simple Aggregation) ---
+    // Monthly Spending (Top 3 Categories) - Placeholder logic until Categories are fully implemented
+    const spendingCircles = [
+        { value: `$${Math.round(ytdExpenses / 12).toLocaleString()}`, label: 'Avg/Mo', color: '#c8ff00', size: 180 },
+        { value: '', label: '', color: '#ff6b6b', size: 220 },
+        { value: '', label: '', color: '#b388ff', size: 250 },
+    ]
+
     return (
         <>
             {/* Header */}
@@ -49,7 +99,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between px-8 py-4">
                     <div>
                         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-                        <p className="text-sm text-gray-500">Monthly Updates</p>
+                        <p className="text-sm text-gray-500">Overview</p>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -76,31 +126,31 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard
                         title="Net Position"
-                        value="$1,240,000"
-                        change="+2.4% this month"
+                        value={`$${netPosition.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`}
+                        change="Based on Property Value"
                         positive
                         variant="teal"
                         icon={<TrendingUp size={18} />}
                     />
                     <StatCard
-                        title="Cash Available"
-                        value="$45,200"
-                        change="+$3,200 from last month"
-                        positive
+                        title="Cash Flow (All Time)"
+                        value={`$${cashAvailable.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`}
+                        change={cashAvailable >= 0 ? "Positive Flow" : "Net Negative"}
+                        positive={cashAvailable >= 0}
                         variant="blue"
                         icon={<Wallet size={18} />}
                     />
                     <StatCard
                         title="YTD Expenses"
-                        value="$42,300"
-                        change="-12% vs last year"
+                        value={`$${ytdExpenses.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`}
+                        change={`Since July 1, ${fyStartYear}`}
                         positive={false}
                         variant="purple"
                     />
                     <StatCard
                         title="Property Income"
-                        value="$3,200/mo"
-                        change="Stable"
+                        value={`$${Math.round(monthlyPropertyIncome).toLocaleString()}/mo`}
+                        change="Estimated"
                         neutral
                         variant="green"
                         icon={<Home size={18} />}
@@ -114,44 +164,31 @@ export default function Dashboard() {
                         <div className="flex items-start justify-between mb-6">
                             <div>
                                 <h3 className="text-lg font-semibold text-white">Monthly Spending</h3>
-                                <p className="text-sm text-gray-500">July 2025 - FY 2025-26</p>
+                                <p className="text-sm text-gray-500">Average based on YTD</p>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-center py-4">
                             <NestedCircles
-                                circles={[
-                                    { value: '$8,450', label: 'Total', color: '#c8ff00', size: 180 },
-                                    { value: '', label: '', color: '#ff6b6b', size: 220 },
-                                    { value: '', label: '', color: '#b388ff', size: 250 },
-                                ]}
+                                circles={spendingCircles}
                             />
                         </div>
 
-                        {/* Legend */}
+                        {/* Legend Placeholder */}
                         <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-dark-border">
                             <div className="text-center">
                                 <div className="w-3 h-3 rounded-full bg-accent-lime mx-auto mb-1"></div>
-                                <p className="text-xs text-gray-400">Property</p>
-                                <p className="text-sm font-semibold text-white">$3,200</p>
+                                <p className="text-xs text-gray-400">Total YTD</p>
+                                <p className="text-sm font-semibold text-white">${(ytdExpenses / 1000).toFixed(1)}k</p>
                             </div>
-                            <div className="text-center">
-                                <div className="w-3 h-3 rounded-full bg-accent-coral mx-auto mb-1"></div>
-                                <p className="text-xs text-gray-400">Living</p>
-                                <p className="text-sm font-semibold text-white">$4,100</p>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-3 h-3 rounded-full bg-accent-purple mx-auto mb-1"></div>
-                                <p className="text-xs text-gray-400">Other</p>
-                                <p className="text-sm font-semibold text-white">$1,150</p>
-                            </div>
+                            {/* Empty Placeholders for now */}
                         </div>
                     </div>
 
                     {/* Weekly Transactions */}
                     <BarChart
                         data={weeklyData}
-                        title="Weekly Transactions"
+                        title="Weekly Activity"
                         subtitle="Last 7 weeks"
                     />
                 </div>
@@ -178,9 +215,20 @@ export default function Dashboard() {
                             </Link>
                         </div>
                         <div className="space-y-3">
-                            {sampleProperties.map((property, index) => (
-                                <PropertyCard key={index} {...property} />
-                            ))}
+                            {investmentProperties.length === 0 ? (
+                                <p className="text-gray-500 text-sm py-4 text-center">No investment properties added.</p>
+                            ) : (
+                                investmentProperties.map((property) => (
+                                    <PropertyCard
+                                        key={property.id}
+                                        address={property.address}
+                                        value={`$${(property.currentValue / 1000).toFixed(0)}k`}
+                                        status={property.propertyStatus === 'rented' ? 'rented' : property.propertyStatus === 'vacant' ? 'vacant' : 'primary_residence'}
+                                        weeklyRent={property.weeklyRent?.toString()}
+                                        yield={property.weeklyRent ? `${((property.weeklyRent * 52 / property.currentValue) * 100).toFixed(1)}%` : undefined}
+                                    />
+                                ))
+                            )}
                         </div>
                     </div>
 
@@ -193,9 +241,20 @@ export default function Dashboard() {
                             </Link>
                         </div>
                         <div className="divide-y divide-dark-border">
-                            {sampleTransactions.map((tx, index) => (
-                                <TransactionRow key={index} {...tx} />
-                            ))}
+                            {recentTransactions.length === 0 ? (
+                                <p className="text-gray-500 text-sm py-4 text-center">No transactions yet.</p>
+                            ) : (
+                                recentTransactions.map((tx, index) => (
+                                    <TransactionRow
+                                        key={index}
+                                        merchant={tx.merchant}
+                                        category={tx.category}
+                                        amount={tx.amount > 0 ? `+$${tx.amount.toFixed(2)}` : `-$${Math.abs(tx.amount).toFixed(2)}`}
+                                        date={tx.date}
+                                        isIncome={tx.isIncome}
+                                    />
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
@@ -203,10 +262,10 @@ export default function Dashboard() {
                 {/* Quick Stats Row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                        { label: 'Total Properties', value: '2', color: 'bg-accent-teal/10 text-accent-teal' },
-                        { label: 'Bank Accounts', value: '4', color: 'bg-accent-purple/10 text-accent-purple' },
-                        { label: 'Tax Deductions', value: '$12.4k', color: 'bg-accent-lime/10 text-accent-lime' },
-                        { label: 'Imports This Month', value: '8', color: 'bg-accent-coral/10 text-accent-coral' },
+                        { label: 'Total Properties', value: properties.length.toString(), color: 'bg-accent-teal/10 text-accent-teal' },
+                        { label: 'Bank Accounts', value: accounts.length.toString(), color: 'bg-accent-purple/10 text-accent-purple' },
+                        { label: 'Unreviewed Txns', value: transactions.filter(t => t.needsReview).length.toString(), color: 'bg-accent-lime/10 text-accent-lime' },
+                        { label: 'Transations', value: transactions.length.toString(), color: 'bg-accent-coral/10 text-accent-coral' },
                     ].map((stat, index) => (
                         <div
                             key={index}

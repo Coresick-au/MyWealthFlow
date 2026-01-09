@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CsvDropzone, TransactionFlowStation } from '@/components'
 import { parseCSV, ParsedTransaction, getSupportedBanks } from '@/lib/csv-parser'
+import { useData } from '@/lib/context/DataContext'
 import { BankCode, BANKS } from '@/lib/types'
 import {
     ArrowLeft,
@@ -15,69 +17,135 @@ import Link from 'next/link'
 
 type ImportState = 'upload' | 'review' | 'success'
 
-// Sample properties for demo
-const sampleProperties = [
-    { id: 'prop-1', address: '29 Wickham Street' },
-    { id: 'prop-2', address: '11 Tobruk Crescent' },
-    { id: 'prop-3', address: '69 Blackwood Road' },
-]
-
-// Sample entities for demo
-const sampleEntities = [
-    { id: 'ent-1', type: 'property' as const, name: '29 Wickham Street', icon: '🏠' },
-    { id: 'ent-2', type: 'property' as const, name: '11 Tobruk Crescent', icon: '🏠' },
-    { id: 'ent-3', type: 'property' as const, name: '69 Blackwood Road', icon: '🏠' },
-    { id: 'ent-4', type: 'personal' as const, name: 'Personal - Brad', icon: '👤' },
-    { id: 'ent-5', type: 'work' as const, name: 'Business', icon: '💼' },
-    { id: 'ent-6', type: 'family' as const, name: 'Tim (Brother)', icon: '👨‍👩‍👧' },
-]
-
 export default function ImportPage() {
+    const { getTransactions, addTransaction, getProperties } = useData()
+    const router = useRouter()
+
+    // State
     const [state, setState] = useState<ImportState>('upload')
     const [transactions, setTransactions] = useState<ParsedTransaction[]>([])
     const [detectedBank, setDetectedBank] = useState<BankCode | null>(null)
     const [importedCount, setImportedCount] = useState(0)
     const [error, setError] = useState<string | null>(null)
+    const [duplicateCount, setDuplicateCount] = useState(0)
 
-    const handleFileUpload = async (file: File) => {
+    // Get real properties
+    const properties = getProperties(false)
+
+    // Construct entities list dynamically
+    const entities = [
+        // Standard Entites
+        { id: 'ent-personal', type: 'personal' as const, name: 'Personal', icon: '👤' },
+        { id: 'ent-work', type: 'work' as const, name: 'Business / Work', icon: '💼' },
+        { id: 'ent-family', type: 'family' as const, name: 'Family', icon: '👨‍👩‍👧' },
+        // Dynamic Properties
+        ...properties.map(p => ({
+            id: p.id,
+            type: 'property' as const,
+            name: p.address,
+            icon: '🏠'
+        }))
+    ]
+
+    const handleFileUpload = async (files: File[]) => {
         try {
             setError(null)
-            const text = await file.text()
-            const result = parseCSV(text)
+            let allTransactions: ParsedTransaction[] = []
+            let detectedBanks = new Set<BankCode>()
+            let totalDuplicates = 0
 
-            if (!result.success) {
-                let errorMsg = result.error || 'Failed to parse CSV file.'
-                if (result.debug) {
-                    errorMsg += ` ${result.debug}`
+            for (const file of files) {
+                const text = await file.text()
+                const result = parseCSV(text)
+
+                if (!result.success) {
+                    console.warn(`Failed to parse ${file.name}: ${result.error}`)
+                    continue
                 }
-                setError(errorMsg)
+
+                if (result.transactions.length > 0) {
+                    if (result.bank) detectedBanks.add(result.bank)
+
+                    // Filter duplicates against *global* state first
+                    const existingTransactions = getTransactions(true)
+                    const existingHashes = new Set(existingTransactions.map(t => t.externalHash))
+
+                    const newTxns = result.transactions.filter(t => !existingHashes.has(t.id))
+                    totalDuplicates += (result.transactions.length - newTxns.length)
+
+                    allTransactions = [...allTransactions, ...newTxns]
+                }
+            }
+
+            if (allTransactions.length === 0 && totalDuplicates > 0) {
+                setError(`All transactions from ${files.length} file(s) were duplicates.`)
                 return
             }
 
-            if (result.transactions.length === 0) {
-                setError('No valid transactions found in the CSV. The file may be empty or in an unsupported format.')
+            if (allTransactions.length === 0) {
+                setError('No valid transactions found in the uploaded files.')
                 return
             }
 
-            setDetectedBank(result.bank)
-            setTransactions(result.transactions)
+            // Deduplicate within the batch itself (if multiple files contain same txns)
+            const uniqueBatchTxns: ParsedTransaction[] = []
+            const batchHashes = new Set<string>()
+
+            for (const txn of allTransactions) {
+                if (!batchHashes.has(txn.id)) {
+                    batchHashes.add(txn.id)
+                    uniqueBatchTxns.push(txn)
+                } else {
+                    totalDuplicates++
+                }
+            }
+
+            setDuplicateCount(totalDuplicates)
+            // If multiple banks detected, we can either set detectedBank to one of them 
+            // or null (Logic in FlowStation might handle null fine?)
+            // For now, if 1 bank, use it. If multiple, use null (mixed).
+            const bank = detectedBanks.size === 1 ? Array.from(detectedBanks)[0] : null
+            setDetectedBank(bank)
+
+            setTransactions(uniqueBatchTxns)
             setState('review')
         } catch (err) {
-            setError('Failed to parse CSV file. Please check the format.')
+            setError('Failed to process files.')
             console.error(err)
         }
     }
 
+    const saveTransactions = (txs: ParsedTransaction[]) => {
+        // Map and save
+        txs.forEach(t => {
+            addTransaction({
+                externalHash: t.id,
+                accountId: 'temp_account_id', // TODO: Map to real account
+                date: t.date,
+                amount: t.amount,
+                rawDescription: t.rawDescription,
+                cleanDescription: t.description,
+                bank: t.bank,
+                importedAt: new Date(),
+                isAllocated: false,
+                needsReview: true,
+                allocations: []
+            })
+        })
+    }
+
     const handleApprove = (approvedTransactions: ParsedTransaction[]) => {
-        // In real app, this would save to Supabase
-        console.log('Importing transactions:', approvedTransactions)
+        saveTransactions(approvedTransactions)
         setImportedCount(approvedTransactions.length)
         setState('success')
     }
 
+
+
     const handleCancel = () => {
         setTransactions([])
         setDetectedBank(null)
+        setDuplicateCount(0)
         setState('upload')
     }
 
@@ -85,6 +153,7 @@ export default function ImportPage() {
         setTransactions([])
         setDetectedBank(null)
         setImportedCount(0)
+        setDuplicateCount(0)
         setState('upload')
         setError(null)
     }
@@ -92,14 +161,21 @@ export default function ImportPage() {
     // Show Transaction Flow Station in review mode
     if (state === 'review') {
         return (
-            <TransactionFlowStation
-                transactions={transactions}
-                properties={sampleProperties}
-                entities={sampleEntities}
-                detectedBank={detectedBank}
-                onApprove={handleApprove}
-                onCancel={handleCancel}
-            />
+            <div className="relative">
+                {duplicateCount > 0 && (
+                    <div className="bg-accent-teal/10 border-b border-accent-teal/20 p-2 text-center text-accent-teal text-sm">
+                        filtered out {duplicateCount} duplicate transactions
+                    </div>
+                )}
+                <TransactionFlowStation
+                    transactions={transactions}
+                    properties={properties}
+                    entities={entities}
+                    detectedBank={detectedBank}
+                    onApprove={handleApprove}
+                    onCancel={handleCancel}
+                />
+            </div>
         )
     }
 

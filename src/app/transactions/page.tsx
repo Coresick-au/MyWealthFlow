@@ -1,34 +1,181 @@
 'use client'
 
-import { useState } from 'react'
-import { Search, Filter, Download, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, Filter, Download, Calendar, ArrowUpRight, ArrowDownRight, ArrowUp, ArrowDown, Pencil } from 'lucide-react'
 import { BankCode, BANKS } from '@/lib/types'
-
-// Mock transaction data
-const MOCK_TRANSACTIONS = [
-    { id: '1', date: new Date('2025-12-12'), description: 'WOOLWORTHS NEWMAN', amount: -142.50, category: 'Groceries', bank: 'CBA' as BankCode, entity: 'Personal' },
-    { id: '2', date: new Date('2025-12-11'), description: 'LOAN REPAYMENT TO A/C 432178590', amount: -1638.45, category: 'Interest on Loans', bank: 'NAB' as BankCode, entity: '69 Blackwood Rd' },
-    { id: '3', date: new Date('2025-12-10'), description: 'RENTAL DEPOSIT - JOHN SMITH', amount: 650.00, category: 'Rental Income', bank: 'CBA' as BankCode, entity: '11 Tobruk Cres' },
-    { id: '4', date: new Date('2025-12-09'), description: 'BUNNINGS WAREHOUSE', amount: -287.90, category: 'Repairs & Maintenance', bank: 'CBA' as BankCode, entity: '29 Wickham St' },
-    { id: '5', date: new Date('2025-12-08'), description: 'SYNERGY ELECTRICITY', amount: -310.00, category: 'Utilities', bank: 'NAB' as BankCode, entity: 'Personal' },
-    { id: '6', date: new Date('2025-12-07'), description: 'TRANSFER TO BRAD LEEMING', amount: -5000.00, category: 'Transfer - Family', bank: 'CBA' as BankCode, entity: 'Family' },
-    { id: '7', date: new Date('2025-12-06'), description: 'CITY OF STIRLING RATES', amount: -1850.00, category: 'Council Rates', bank: 'CBA' as BankCode, entity: '69 Blackwood Rd' },
-    { id: '8', date: new Date('2025-12-05'), description: 'COLES EXPRESS FUEL', amount: -95.40, category: 'Fuel', bank: 'NAB' as BankCode, entity: 'Work' },
-]
+import { useData, TransactionRecord } from '@/lib/context/DataContext'
+import { EditTransactionModal } from '@/components/modals/EditTransactionModal'
 
 const CATEGORIES = ['All', 'Groceries', 'Fuel', 'Utilities', 'Interest on Loans', 'Rental Income', 'Council Rates', 'Repairs & Maintenance', 'Transfer - Family']
 
 export default function TransactionsPage() {
+    const { getTransactions } = useData()
     const [searchQuery, setSearchQuery] = useState('')
     const [selectedCategory, setSelectedCategory] = useState('All')
-    const [dateRange, setDateRange] = useState('This Month')
+    const [dateRange, setDateRange] = useState('This Month') // Default to This Month
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' })
+    const [editingTransaction, setEditingTransaction] = useState<TransactionRecord | null>(null)
 
-    const filteredTransactions = MOCK_TRANSACTIONS.filter(txn => {
-        const matchesSearch = txn.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            txn.category.toLowerCase().includes(searchQuery.toLowerCase())
-        const matchesCategory = selectedCategory === 'All' || txn.category === selectedCategory
-        return matchesSearch && matchesCategory
+    // Persistence: Load settings on mount
+    useEffect(() => {
+        const savedDateRange = localStorage.getItem('mwf_txn_dateRange')
+        if (savedDateRange) setDateRange(savedDateRange)
+
+        const savedCategory = localStorage.getItem('mwf_txn_category')
+        if (savedCategory) setSelectedCategory(savedCategory)
+
+        const savedSort = localStorage.getItem('mwf_txn_sort')
+        if (savedSort) {
+            try {
+                setSortConfig(JSON.parse(savedSort))
+            } catch (e) {
+                console.error('Failed to parse saved sort config', e)
+            }
+        }
+    }, [])
+
+    // Persistence: Save settings on change
+    useEffect(() => {
+        localStorage.setItem('mwf_txn_dateRange', dateRange)
+    }, [dateRange])
+
+    useEffect(() => {
+        localStorage.setItem('mwf_txn_category', selectedCategory)
+    }, [selectedCategory])
+
+    useEffect(() => {
+        localStorage.setItem('mwf_txn_sort', JSON.stringify(sortConfig))
+    }, [sortConfig])
+
+    // Get transactions from context
+    const transactions = getTransactions(false) // Don't include archived/deleted
+
+    // Get unique categories dynamically from actual data + defaults
+    const availableCategories = ['All', ...Array.from(new Set([
+        ...CATEGORIES,
+        ...transactions.map(t => (t as any).category || 'Uncategorised') // Simplified since real category logic is pending
+    ]))].filter((v, i, a) => a.indexOf(v) === i).sort()
+
+    // Note: The mock data had 'category' but the actual Transaction type might store it in 'allocations' or 'categoryId'
+    // For this import flow, we are treating `suggestedCategory` or unallocated.
+    // We need to map the Context transactions to the display format.
+
+    // Helper to extract a display category
+    const getDisplayCategory = (txn: any) => {
+        if (txn.allocations && txn.allocations.length > 0) {
+            return txn.allocations[0].categoryId // Simplified for now
+        }
+        return txn.cleanDescription || 'Uncategorised'
+    }
+
+    const getStartDate = (range: string) => {
+        const now = new Date()
+        const currentYear = now.getFullYear()
+
+        switch (range) {
+            case 'This Month':
+                return new Date(now.getFullYear(), now.getMonth(), 1)
+            case 'Last Month':
+                return new Date(now.getFullYear(), now.getMonth() - 1, 1)
+            case 'This FY':
+                // Financial Year starts July 1st
+                const fyStartYear = now.getMonth() < 6 ? currentYear - 1 : currentYear
+                return new Date(fyStartYear, 6, 1) // Month is 0-indexed, 6 is July
+            case 'All Time':
+            default:
+                return null
+        }
+    }
+
+    const getEndDate = (range: string) => {
+        const now = new Date()
+        const currentYear = now.getFullYear()
+
+        switch (range) {
+            case 'Last Month':
+                // Last day of last month
+                return new Date(now.getFullYear(), now.getMonth(), 0)
+            case 'This Month':
+                // Return null to go up to now
+                return null
+            case 'This FY':
+            case 'All Time':
+            default:
+                return null // No end date limit (up to now/future)
+        }
+    }
+
+    const filteredTransactions = transactions.filter(txn => {
+        const displayCategory = txn.allocations?.[0]?.categoryId || 'Uncategorised' // Temporary mapping
+        // We might need to adjust how category is stored/retrieved. 
+        // For the import, we didn't strictly set allocations yet, we set `needsReview`.
+
+        // Let's use a simpler check for now since imported txns might not have categories set up fully.
+        // We should check 'needsReview' too potentially?
+
+        const description = txn.cleanDescription || txn.rawDescription
+        const matchesSearch = description.toLowerCase().includes(searchQuery.toLowerCase())
+
+        // const matchesCategory = selectedCategory === 'All' || displayCategory === selectedCategory
+        // Disable category filter for a moment if data structure mismatch, but keeping it logic wise:
+        const matchesCategory = selectedCategory === 'All' // Temporary allow all while we fix category mapping
+
+        // Date Filtering
+        let matchesDate = true
+        const startDate = getStartDate(dateRange)
+        const endDate = getEndDate(dateRange)
+        const txnDate = new Date(txn.date)
+
+        if (startDate) {
+            matchesDate = txnDate >= startDate
+        }
+        if (endDate && matchesDate) {
+            // Set endDate to end of day
+            const eod = new Date(endDate)
+            eod.setHours(23, 59, 59, 999)
+            matchesDate = txnDate <= eod
+        }
+
+        return matchesSearch && matchesCategory && matchesDate
+    }).sort((a, b) => {
+        const { key, direction } = sortConfig
+        let comparison = 0
+
+        switch (key) {
+            case 'date':
+                comparison = new Date(a.date).getTime() - new Date(b.date).getTime()
+                break
+            case 'amount':
+                comparison = Math.abs(a.amount) - Math.abs(b.amount)
+                break
+            case 'description':
+                const descA = (a.cleanDescription || a.rawDescription).toLowerCase()
+                const descB = (b.cleanDescription || b.rawDescription).toLowerCase()
+                comparison = descA.localeCompare(descB)
+                break
+            case 'bank':
+                comparison = a.bank.localeCompare(b.bank)
+                break
+            default:
+                break
+        }
+
+        return direction === 'asc' ? comparison : -comparison
     })
+
+    const handleSort = (key: string) => {
+        setSortConfig(current => ({
+            key,
+            direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+        }))
+    }
+
+    const SortIcon = ({ column }: { column: string }) => {
+        if (sortConfig.key !== column) return <div className="w-4 h-4" /> // Spacer
+        return sortConfig.direction === 'asc'
+            ? <ArrowUp size={16} className="text-accent-teal" />
+            : <ArrowDown size={16} className="text-accent-teal" />
+    }
 
     const totalIncome = filteredTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0)
     const totalExpenses = Math.abs(filteredTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0))
@@ -90,10 +237,19 @@ export default function TransactionsPage() {
                         <option key={cat} value={cat}>{cat}</option>
                     ))}
                 </select>
-                <button className="bg-dark-card border border-dark-border px-4 py-3 rounded-xl text-white hover:bg-dark-card-hover transition-colors flex items-center gap-2">
-                    <Calendar size={18} />
-                    {dateRange}
-                </button>
+                <div className="relative">
+                    <Calendar size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <select
+                        value={dateRange}
+                        onChange={(e) => setDateRange(e.target.value)}
+                        className="bg-dark-card border border-dark-border rounded-xl py-3 pl-11 pr-4 text-white hover:bg-dark-card-hover transition-colors appearance-none cursor-pointer focus:outline-none focus:border-accent-teal/50"
+                    >
+                        <option value="This Month">This Month</option>
+                        <option value="Last Month">Last Month</option>
+                        <option value="This FY">This FY</option>
+                        <option value="All Time">All Time</option>
+                    </select>
+                </div>
             </div>
 
             {/* Transactions Table */}
@@ -101,34 +257,79 @@ export default function TransactionsPage() {
                 <table className="w-full">
                     <thead className="bg-dark-bg/50 border-b border-dark-border">
                         <tr>
-                            <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Date</th>
-                            <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Description</th>
+                            <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">
+                                <button
+                                    className="flex items-center gap-2 hover:text-white transition-colors"
+                                    onClick={() => handleSort('date')}
+                                >
+                                    Date
+                                    <SortIcon column="date" />
+                                </button>
+                            </th>
+                            <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">
+                                <button
+                                    className="flex items-center gap-2 hover:text-white transition-colors"
+                                    onClick={() => handleSort('description')}
+                                >
+                                    Description
+                                    <SortIcon column="description" />
+                                </button>
+                            </th>
                             <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Category</th>
                             <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Entity</th>
-                            <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Bank</th>
-                            <th className="text-right py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Amount</th>
+                            <th className="text-left py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">
+                                <button
+                                    className="flex items-center gap-2 hover:text-white transition-colors"
+                                    onClick={() => handleSort('bank')}
+                                >
+                                    Bank
+                                    <SortIcon column="bank" />
+                                </button>
+                            </th>
+                            <th className="text-right py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">
+                                <button
+                                    className="flex items-center gap-2 ml-auto hover:text-white transition-colors"
+                                    onClick={() => handleSort('amount')}
+                                >
+                                    Amount
+                                    <SortIcon column="amount" />
+                                </button>
+                            </th>
+                            <th className="text-right py-4 px-6 text-xs text-gray-500 uppercase tracking-wider font-bold">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filteredTransactions.map((txn, idx) => (
                             <tr
                                 key={txn.id}
-                                className={`border-b border-dark-border hover:bg-dark-card-hover transition-colors cursor-pointer ${idx % 2 === 0 ? '' : 'bg-dark-bg/30'}`}
+                                className={`border-b border-dark-border hover:bg-dark-card-hover transition-colors ${idx % 2 === 0 ? '' : 'bg-dark-bg/30'} ${txn.needsReview ? 'bg-orange-900/10' : ''}`}
                             >
                                 <td className="py-4 px-6 text-gray-400 font-mono text-sm">
-                                    {txn.date.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                    {new Date(txn.date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' })}
                                 </td>
-                                <td className="py-4 px-6 text-white font-medium">{txn.description}</td>
-                                <td className="py-4 px-6">
-                                    <span className="bg-dark-bg px-3 py-1 rounded-lg text-sm text-gray-300">{txn.category}</span>
+                                <td className="py-4 px-6 text-white font-medium">
+                                    {txn.cleanDescription || txn.rawDescription}
+                                    {txn.needsReview && (
+                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">Review</span>
+                                    )}
                                 </td>
                                 <td className="py-4 px-6">
-                                    <span className="text-accent-lime text-sm font-medium">{txn.entity}</span>
+                                    <button
+                                        onClick={() => setEditingTransaction(txn)}
+                                        className="bg-dark-bg px-3 py-1 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-dark-border transition-colors text-left"
+                                    >
+                                        {(txn as any).allocations?.[0]?.categoryId || 'Uncategorised'}
+                                    </button>
+                                </td>
+                                <td className="py-4 px-6">
+                                    <span className="text-accent-lime text-sm font-medium">
+                                        -
+                                    </span>
                                 </td>
                                 <td className="py-4 px-6">
                                     <span
                                         className="text-xs font-bold px-2 py-1 rounded"
-                                        style={{ backgroundColor: BANKS[txn.bank].color, color: '#000' }}
+                                        style={{ backgroundColor: BANKS[txn.bank]?.color || '#fff', color: '#000' }}
                                     >
                                         {txn.bank}
                                     </span>
@@ -145,11 +346,32 @@ export default function TransactionsPage() {
                                         </span>
                                     </div>
                                 </td>
+                                <td className="py-4 px-6 text-right">
+                                    <button
+                                        onClick={() => setEditingTransaction(txn)}
+                                        className="p-2 text-gray-500 hover:text-white hover:bg-dark-border rounded-lg transition-colors"
+                                    >
+                                        <Pencil size={16} />
+                                    </button>
+                                </td>
                             </tr>
                         ))}
+                        {filteredTransactions.length === 0 && (
+                            <tr>
+                                <td colSpan={7} className="py-12 text-center text-gray-500">
+                                    No transactions found for this period.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
+
+            <EditTransactionModal
+                isOpen={!!editingTransaction}
+                onClose={() => setEditingTransaction(null)}
+                transaction={editingTransaction}
+            />
         </div>
     )
 }

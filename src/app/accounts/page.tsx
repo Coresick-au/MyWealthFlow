@@ -8,12 +8,11 @@ import { AccountModal } from '@/components/modals/AccountModal'
 import { useData, AccountRecord } from '@/lib/context/DataContext'
 import { BankCode, BANKS } from '@/lib/types'
 
-const TANKS = ['All Tanks', 'Work', 'Property', 'Sole', 'Holding', 'Personal']
+// TANKS removed
 
 export default function AccountsPage() {
-    const { getAccounts, getProperties } = useData()
+    const { getAccounts, getProperties, getTransactions } = useData()
 
-    const [activeTank, setActiveTank] = useState('All Tanks')
     const [searchQuery, setSearchQuery] = useState('')
     const [displayActiveOnly, setDisplayActiveOnly] = useState(true)
     const [showArchived, setShowArchived] = useState(false)
@@ -23,11 +22,12 @@ export default function AccountsPage() {
     const [selectedAccount, setSelectedAccount] = useState<AccountRecord | undefined>()
     const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
 
-    // Get accounts from context
+    // Get data from context
     const accounts = getAccounts(!displayActiveOnly || showArchived)
     const properties = getProperties()
+    const transactions = getTransactions()
 
-    // Calculate bank counts
+    // Calculate bank counts for summary
     const bankCounts = accounts.reduce((acc, account) => {
         const bankCode = account.bankId as BankCode
         acc[bankCode] = (acc[bankCode] || 0) + 1
@@ -45,6 +45,22 @@ export default function AccountsPage() {
             acc.accountNumber.includes(searchQuery)
         return matchesSearch
     })
+
+    // Group by Bank
+    const groupedAccounts = filteredAccounts.reduce((groups, account) => {
+        const bankId = account.bankId
+        if (!groups[bankId]) groups[bankId] = []
+        groups[bankId].push(account)
+        return groups
+    }, {} as Record<string, AccountRecord[]>)
+
+    // Helper to get transaction counts
+    const getAccountCounts = (accountId: string) => {
+        const accountTxns = transactions.filter(t => t.accountId === accountId && t.status !== 'deleted')
+        const needsReviewCount = accountTxns.filter(t => t.needsReview).length
+        const reconcileCount = accountTxns.filter(t => !t.isAllocated && !t.needsReview).length
+        return { needsReviewCount, reconcileCount }
+    }
 
     const handleAddAccount = () => {
         setSelectedAccount(undefined)
@@ -68,20 +84,7 @@ export default function AccountsPage() {
         <div className="p-8 max-w-7xl mx-auto">
             {/* Top Toolbar */}
             <div className="flex items-center justify-between mb-8">
-                <div className="flex bg-dark-card p-1 rounded-xl border border-dark-border gap-1">
-                    {TANKS.map(tank => (
-                        <button
-                            key={tank}
-                            onClick={() => setActiveTank(tank)}
-                            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTank === tank
-                                    ? 'bg-accent-teal text-dark-bg'
-                                    : 'text-gray-400 hover:text-white'
-                                }`}
-                        >
-                            {tank}
-                        </button>
-                    ))}
-                </div>
+                <h1 className="text-2xl font-bold text-white">Accounts</h1>
 
                 <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -125,7 +128,7 @@ export default function AccountsPage() {
                 />
             </div>
 
-            {/* Accounts Grid */}
+            {/* Accounts Grouped by Bank */}
             {filteredAccounts.length === 0 ? (
                 <div className="text-center py-16">
                     <p className="text-gray-500 mb-4">No accounts found. Add your first account to get started.</p>
@@ -138,16 +141,35 @@ export default function AccountsPage() {
                     </button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredAccounts.map(account => (
-                        <div key={account.id} onClick={() => handleEditAccount(account)} className="cursor-pointer">
-                            <AccountCard
-                                account={account}
-                                bankBalance={0}
-                                appBalance={0}
-                                reconcileCount={0}
-                                linkedPropertyName={getPropertyName(account.linkedPropertyId)}
-                            />
+                <div className="space-y-8">
+                    {Object.entries(groupedAccounts).map(([bankId, bankAccounts]) => (
+                        <div key={bankId}>
+                            <div className="flex items-center gap-3 mb-4 border-b border-dark-border pb-2">
+                                <div className="p-2 bg-dark-card rounded-lg border border-dark-border">
+                                    <span className="font-bold text-white">{bankId}</span>
+                                </div>
+                                <h2 className="text-lg font-bold text-gray-300">
+                                    {bankAccounts.length} account(s)
+                                </h2>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {bankAccounts.map(account => {
+                                    const { needsReviewCount, reconcileCount } = getAccountCounts(account.id)
+                                    return (
+                                        <div key={account.id} onClick={() => handleEditAccount(account)} className="cursor-pointer">
+                                            <AccountCard
+                                                account={account}
+                                                bankBalance={0} // TODO: Calculate from transactions
+                                                appBalance={0}
+                                                reconcileCount={reconcileCount}
+                                                needsReviewCount={needsReviewCount}
+                                                linkedPropertyName={getPropertyName(account.linkedPropertyId)}
+                                            />
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
                     ))}
                 </div>

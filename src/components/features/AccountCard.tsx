@@ -1,6 +1,6 @@
 'use client'
 
-import { MoreVertical, ExternalLink } from 'lucide-react'
+import { MoreVertical, ExternalLink, AlertTriangle } from 'lucide-react'
 import { Account, BANKS, BankCode } from '@/lib/types'
 
 interface AccountCardProps {
@@ -8,6 +8,7 @@ interface AccountCardProps {
     bankBalance: number
     appBalance: number
     reconcileCount: number
+    needsReviewCount?: number
     onReconcile?: () => void
     onDetails?: () => void
     linkedPropertyName?: string
@@ -18,6 +19,7 @@ export function AccountCard({
     bankBalance,
     appBalance,
     reconcileCount,
+    needsReviewCount = 0,
     onReconcile,
     onDetails,
     linkedPropertyName
@@ -70,12 +72,15 @@ export function AccountCard({
 
             {/* Actions */}
             <div className="p-4 bg-dark-card flex flex-col gap-3">
-                {reconcileCount > 0 ? (
+                {reconcileCount > 0 || needsReviewCount > 0 ? (
                     <button
                         onClick={onReconcile}
-                        className="w-full py-2.5 bg-accent-teal text-dark-bg font-bold rounded-xl hover:shadow-lg hover:shadow-accent-teal/20 transition-all flex items-center justify-center gap-2"
+                        className={`w-full py-2.5 font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${needsReviewCount > 0
+                            ? 'bg-accent-orange text-dark-bg hover:shadow-lg hover:shadow-accent-orange/20'
+                            : 'bg-accent-teal text-dark-bg hover:shadow-lg hover:shadow-accent-teal/20'
+                            }`}
                     >
-                        Reconcile {reconcileCount} Items
+                        {needsReviewCount > 0 ? `Review ${needsReviewCount} Items` : `Reconcile ${reconcileCount} Items`}
                     </button>
                 ) : (
                     <button
