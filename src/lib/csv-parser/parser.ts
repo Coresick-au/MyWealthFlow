@@ -59,9 +59,6 @@ export function parseCSV(csvText: string, accountId?: string): ParseResult {
     // Parse into arrays
     const rows = parseCSVToArrays(csvText)
 
-    console.log('[CSV Parser] Total rows:', rows.length)
-    console.log('[CSV Parser] First row:', rows[0])
-
     if (rows.length === 0) {
         return {
             success: false,
@@ -73,8 +70,6 @@ export function parseCSV(csvText: string, accountId?: string): ParseResult {
 
     // Detect bank
     const strategy = detectBank(rows)
-
-    console.log('[CSV Parser] Detected bank:', strategy?.bankCode || 'NONE')
 
     if (!strategy) {
         // For debugging - show what we found
@@ -92,31 +87,14 @@ export function parseCSV(csvText: string, accountId?: string): ParseResult {
     const hasHeader = strategy.hasHeaderRow(rows)
     const dataRows = hasHeader ? rows.slice(1) : rows
 
-    console.log('[CSV Parser] Has header:', hasHeader, '| Data rows:', dataRows.length)
-    if (dataRows.length > 0) {
-        console.log('[CSV Parser] First data row:', dataRows[0])
-    }
-
     const transactions: ParsedTransaction[] = []
-    let parseFailures = 0
 
-    for (let i = 0; i < dataRows.length; i++) {
-        const row = dataRows[i]
+    for (const row of dataRows) {
         const parsed = strategy.parseRow(row)
-
-        if (!parsed) {
-            parseFailures++
-            if (i < 3) {
-                console.log('[CSV Parser] Failed to parse row', i, ':', row.slice(0, 6))
-            }
-            continue
-        }
+        if (!parsed) continue
 
         const date = parseAustralianDate(parsed.date)
-        if (!date) {
-            console.log('[CSV Parser] Failed to parse date:', parsed.date)
-            continue
-        }
+        if (!date) continue
 
         const cleanDesc = strategy.cleanDescription(parsed.description)
         const hash = generateTransactionHash(
@@ -140,8 +118,6 @@ export function parseCSV(csvText: string, accountId?: string): ParseResult {
             balance: parsed.balance
         })
     }
-
-    console.log('[CSV Parser] Successfully parsed:', transactions.length, '| Failed:', parseFailures)
 
     // Sort by date, newest first
     transactions.sort((a, b) => b.date.getTime() - a.date.getTime())

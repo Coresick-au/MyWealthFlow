@@ -18,7 +18,8 @@ import {
 const navItems = [
     { icon: PieChart, label: 'Dashboard', href: '/' },
     { icon: Home, label: 'Properties', href: '/properties' },
-    { icon: DollarSign, label: 'Transactions', href: '/transactions' },
+    { icon: DollarSign, label: 'Accounts', href: '/accounts' },
+    { icon: FileText, label: 'Transactions', href: '/transactions' },
     { icon: Upload, label: 'Import', href: '/import' },
     { icon: FileText, label: 'Tax Reports', href: '/reports' },
 ]
